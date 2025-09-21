@@ -21,6 +21,9 @@ ZABBIX_CONF_DIR="/usr/local/etc/zabbix_agentd.conf.d"
 ZABBIX_PKITOOLS_CONF="$ZABBIX_CONF_DIR/pkitools.conf"
 ZABBIX_RELOAD_CMD="/usr/local/sbin/zabbix_agentd -R userparameter_reload"
 
+# Package management
+PKG_INSTALL_CMD="pkg install -y"
+
 # Base URL for GitHub raw content (to be set when script is downloaded)
 # This will be set dynamically based on the script's source URL
 BASE_URL=""
@@ -216,6 +219,59 @@ reload_zabbix_config() {
     fi
 }
 
+# Function to install packages from package list
+install_packages() {
+    local package_file="$1"
+    local failed_packages=""
+    local package_count=0
+    local failed_count=0
+    
+    if [ ! -f "$package_file" ]; then
+        log "INFO: No package list file found, skipping package installation"
+        return 0
+    fi
+    
+    log "Installing packages from package list"
+    
+    # Process package list
+    while IFS= read -r package || [ -n "$package" ]; do
+        # Skip empty lines and comments
+        case "$package" in
+            ''|'#'*) continue ;;
+        esac
+        
+        # Trim whitespace
+        package=$(echo "$package" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        if [ -n "$package" ]; then
+            package_count=$((package_count + 1))
+            log "Installing package: $package"
+            
+            # Install package, suppress output but track exit code
+            if $PKG_INSTALL_CMD "$package" >/dev/null 2>&1; then
+                log "SUCCESS: Package $package installed"
+            else
+                log "ERROR: Failed to install package $package (exit code: $?)"
+                failed_packages="$failed_packages $package"
+                failed_count=$((failed_count + 1))
+            fi
+        fi
+    done < "$package_file"
+    
+    # Summary logging
+    if [ $package_count -eq 0 ]; then
+        log "INFO: No packages found in package list"
+    elif [ $failed_count -eq 0 ]; then
+        log "SUCCESS: All $package_count packages installed successfully"
+    else
+        log "WARNING: $failed_count of $package_count packages failed to install:$failed_packages"
+        # Don't fail the entire installation for package failures
+        return 0
+    fi
+    
+    return 0
+}
+
 # Function to determine base URL from script source
 determine_base_url() {
     # Set default branch if V is not defined
@@ -319,6 +375,19 @@ determine_base_url() {
         log "ERROR: Failed to download manifest"
         rm -f "$TEMP_VERSION" "$TEMP_MANIFEST"
         exit_with_code 1
+    fi
+    
+    # Download and install packages if package list exists
+    PACKAGE_LIST_URL="$BASE_URL/package-list.txt"
+    TEMP_PACKAGE_LIST="/tmp/pkitools-package-list.txt"
+    
+    log "Checking for package list: $PACKAGE_LIST_URL"
+    if download_file "$PACKAGE_LIST_URL" "$TEMP_PACKAGE_LIST" "$DOWNLOAD_TOOL"; then
+        log "Package list found, installing packages"
+        install_packages "$TEMP_PACKAGE_LIST"
+        rm -f "$TEMP_PACKAGE_LIST"
+    else
+        log "INFO: No package list found, skipping package installation"
     fi
     
     # Process manifest and download scripts
