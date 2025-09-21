@@ -39,7 +39,14 @@ exit_with_code() {
         rm -f "$LOCK_FILE" 2>/dev/null
         log "Released lock file"
     fi
-    echo "$code"
+    
+    # Print version number if successful, "N/A" if failed
+    if [ "$code" -eq 0 ] && [ -n "$REMOTE_VERSION" ]; then
+        echo "$REMOTE_VERSION"
+    else
+        echo "N/A"
+    fi
+    
     exit $code
 }
 
