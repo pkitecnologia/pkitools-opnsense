@@ -36,6 +36,7 @@ exit_with_code() {
         rm -f "$LOCK_FILE" 2>/dev/null
         log "Released lock file"
     fi
+    echo "$code"
     exit $code
 }
 
