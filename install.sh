@@ -10,6 +10,8 @@ PKITOOLS_DIR="/pkitools"
 SCRIPTS_DIR="$PKITOOLS_DIR/scripts"
 VERSION_FILE="$PKITOOLS_DIR/version.txt"
 LOG_FILE="$PKITOOLS_DIR/downloader.log"
+LOCK_FILE="$PKITOOLS_DIR/downloader.lock"
+LOCK_TIMEOUT=300  # 5 minutes max lock age
 
 # Base URL for GitHub raw content (to be set when script is downloaded)
 # This will be set dynamically based on the script's source URL
@@ -24,7 +26,47 @@ log() {
 exit_with_code() {
     local code=$1
     log "Exiting with code: $code"
+    # Remove lock file if we created it
+    if [ -f "$LOCK_FILE" ] && [ "$(cat "$LOCK_FILE" 2>/dev/null)" = "$$" ]; then
+        rm -f "$LOCK_FILE" 2>/dev/null
+        log "Released lock file"
+    fi
     exit $code
+}
+
+# Function to acquire execution lock
+acquire_lock() {
+    local current_time=$(date +%s)
+    
+    # Check if lock file exists
+    if [ -f "$LOCK_FILE" ]; then
+        local lock_pid=$(cat "$LOCK_FILE" 2>/dev/null)
+        local lock_time=$(stat -f %m "$LOCK_FILE" 2>/dev/null || stat -c %Y "$LOCK_FILE" 2>/dev/null || echo "0")
+        
+        # Check if lock is stale (older than LOCK_TIMEOUT)
+        if [ $((current_time - lock_time)) -gt $LOCK_TIMEOUT ]; then
+            log "Removing stale lock file (older than $LOCK_TIMEOUT seconds)"
+            rm -f "$LOCK_FILE" 2>/dev/null
+        else
+            # Check if the process is still running
+            if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
+                log "ERROR: Another instance is already running (PID: $lock_pid)"
+                exit_with_code 1
+            else
+                log "Removing orphaned lock file (process $lock_pid not running)"
+                rm -f "$LOCK_FILE" 2>/dev/null
+            fi
+        fi
+    fi
+    
+    # Create lock file with our PID
+    if echo "$$" > "$LOCK_FILE" 2>/dev/null; then
+        log "Acquired execution lock (PID: $$)"
+        return 0
+    else
+        log "ERROR: Failed to create lock file"
+        exit_with_code 1
+    fi
 }
 
 # Function to detect download tool
@@ -39,7 +81,7 @@ get_download_tool() {
     fi
 }
 
-# Function to download a file
+# Function to download a file with timeouts and retries
 download_file() {
     local url="$1"
     local output="$2"
@@ -49,7 +91,8 @@ download_file() {
     
     case "$tool" in
         "fetch")
-            if fetch -q -o "$output" "$url" >/dev/null 2>&1; then
+            # FreeBSD fetch with timeout (10s connect, 60s total, 3 retries)
+            if fetch -q -T 10 -w 60 -a -o "$output" "$url" >/dev/null 2>&1; then
                 log "SUCCESS: Downloaded $url"
                 return 0
             else
@@ -58,7 +101,9 @@ download_file() {
             fi
             ;;
         "curl")
-            if curl -s -o "$output" "$url" >/dev/null 2>&1; then
+            # curl with comprehensive timeout and retry settings
+            if curl -fsSL --connect-timeout 10 --max-time 60 --retry 3 --retry-delay 2 \
+                   -o "$output" "$url" >/dev/null 2>&1; then
                 log "SUCCESS: Downloaded $url"
                 return 0
             else
@@ -108,6 +153,9 @@ determine_base_url() {
     # Initialize log file (overwrite previous)
     echo "PKITools-Monitor Download Log - $(date)" > "$LOG_FILE"
     log "Starting PKITools-Monitor package manager"
+    
+    # Acquire execution lock to prevent overlapping runs
+    acquire_lock
     
     # Determine base URL
     determine_base_url
