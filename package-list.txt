@@ -1,2 +1,2 @@
 jq
-
+py311-speedtest-cli
