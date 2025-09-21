@@ -150,22 +150,22 @@ determine_base_url() {
 
 # Main execution starts here
 {
-    # Initialize log file (overwrite previous)
+    # Create directories FIRST (before any logging or lock operations)
+    if ! mkdir -p "$PKITOOLS_DIR" "$SCRIPTS_DIR" 2>/dev/null; then
+        # Can't log yet since directory doesn't exist, just exit with error code
+        exit 1
+    fi
+    
+    # NOW initialize log file (directory exists)
     echo "PKITools-Monitor Download Log - $(date)" > "$LOG_FILE"
     log "Starting PKITools-Monitor package manager"
+    log "Created directory structure: $PKITOOLS_DIR"
     
     # Acquire execution lock to prevent overlapping runs
     acquire_lock
     
     # Determine base URL
     determine_base_url
-    
-    # Create directories if they don't exist
-    log "Creating directory structure"
-    if ! mkdir -p "$PKITOOLS_DIR" "$SCRIPTS_DIR" 2>/dev/null; then
-        log "ERROR: Failed to create directories"
-        exit_with_code 1
-    fi
     
     # Detect download tool
     DOWNLOAD_TOOL=$(get_download_tool)
