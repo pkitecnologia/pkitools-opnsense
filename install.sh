@@ -5,6 +5,9 @@
 # Silent operation - only returns exit codes: 0 = success, 1 = error
 # Logs detailed output to /pkitools/downloader.log
 
+# Set PATH to ensure all commands are available
+export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+
 # Configuration
 PKITOOLS_DIR="/pkitools"
 SCRIPTS_DIR="$PKITOOLS_DIR/scripts"
