@@ -71,10 +71,10 @@ acquire_lock() {
 
 # Function to detect download tool
 get_download_tool() {
-    if command -v fetch >/dev/null 2>&1; then
-        echo "fetch"
-    elif command -v curl >/dev/null 2>&1; then
+    if command -v curl >/dev/null 2>&1; then
         echo "curl"
+    elif command -v fetch >/dev/null 2>&1; then
+        echo "fetch"
     else
         log "ERROR: Neither fetch nor curl found"
         return 1
