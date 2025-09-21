@@ -195,16 +195,12 @@ generate_zabbix_config() {
 reload_zabbix_config() {
     log "Reloading Zabbix agent configuration"
     
-    if [ -x "$ZABBIX_RELOAD_CMD" ]; then
-        if $ZABBIX_RELOAD_CMD >/dev/null 2>&1; then
-            log "SUCCESS: Zabbix agent configuration reloaded"
-            return 0
-        else
-            log "WARNING: Failed to reload Zabbix agent configuration"
-            return 1
-        fi
+    # Just execute the command and check return code
+    if $ZABBIX_RELOAD_CMD >/dev/null 2>&1; then
+        log "SUCCESS: Zabbix agent configuration reloaded"
+        return 0
     else
-        log "WARNING: Zabbix agent not found at $ZABBIX_RELOAD_CMD"
+        log "WARNING: Failed to reload Zabbix agent configuration (exit code: $?)"
         return 1
     fi
 }
