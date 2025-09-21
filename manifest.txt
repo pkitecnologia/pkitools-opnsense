@@ -1,0 +1,9 @@
+# PKITools-Monitor Manifest File
+# Format: <script_filename> <zabbix_custom_item_name>
+# Scripts will be downloaded from $BASE_URL/scripts/<script_filename> to /pkitools/scripts/<script_filename>
+
+check-cert-expiry.sh pki.tools.check_cert_expiry
+monitor-crl.sh pki.tools.monitor_crl
+validate-chain.sh pki.tools.validate_chain
+check-ca-health.sh pki.tools.check_ca_health
+audit-certificates.sh pki.tools.audit_certificates
