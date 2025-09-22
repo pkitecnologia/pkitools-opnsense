@@ -6,3 +6,4 @@ wancheck.sh pki.tools.wancheck 2
 arping.sh pki.tools.arping 1
 arping.bin pki.tools.arping.bin 0
 cputemp.sh pki.tools.cputemp 0
+ifdescr.sh pki.tools.netdiscover 0
