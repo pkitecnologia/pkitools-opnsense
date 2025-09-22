@@ -1,6 +1,6 @@
 #!/bin/sh
 # FreeBSD LLD: discover only interfaces that have an IP and a description,
-# and emit {#IFNAME} + {#IFDESCR} where the description has any final " (xxx)" removed.
+# and emit {IFNAME} + {IFDESCR} where the description has any final " (xxx)" removed.
 
 # Set PATH to ensure all commands are available
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
@@ -40,7 +40,7 @@ for ifc in $iflist; do
 
   if [ $first -eq 0 ]; then printf ','; fi
   first=0
-  printf '{"{#IFNAME}":"%s","{#IFDESCR}":"%s"}' "$ifc" "$esc_descr"
+  printf '{"{IFNAME}":"%s","{IFDESCR}":"%s"}' "$ifc" "$esc_descr"
 done
 
 printf ']\n'
