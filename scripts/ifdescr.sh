@@ -2,6 +2,9 @@
 # FreeBSD LLD: discover only interfaces that have an IP and a description,
 # and emit {#IFNAME} + {#IFDESCR} where the description has any final " (xxx)" removed.
 
+# Set PATH to ensure all commands are available
+export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+
 # List interfaces (skip loopback by default)
 iflist=$(ifconfig -l | tr ' ' '\n' | grep -v '^lo0$')
 
