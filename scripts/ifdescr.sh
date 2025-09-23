@@ -40,7 +40,7 @@ for ifc in $iflist; do
 
   if [ $first -eq 0 ]; then printf ','; fi
   first=0
-  printf '{"{IFNAME}":"%s","{IFDESCR}":"%s"}' "$ifc" "$esc_descr"
+  printf '{"{#IFNAME}":"%s","{#IFDESCR}":"%s"}' "$ifc" "$esc_descr"
 done
 
 printf ']\n'
