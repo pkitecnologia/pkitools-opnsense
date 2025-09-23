@@ -8,3 +8,4 @@ arping.bin pki.tools.arping.bin 0
 cputemp.sh pki.tools.cputemp 0
 ifdescr.sh pki.tools.netdiscover 0
 configdump.sh pki.tools.configdump 0
+netping pki.tools.netping 3
