@@ -9,7 +9,7 @@ export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
 iflist=$(ifconfig -l | tr ' ' '\n' | grep -v '^lo0$')
 
 first=1
-printf '['
+#printf '['
 
 for ifc in $iflist; do
   # Has at least one IPv4/IPv6?
@@ -40,7 +40,7 @@ for ifc in $iflist; do
 
   if [ $first -eq 0 ]; then printf ','; fi
   first=0
-  printf '{"{#IFNAME}":"%s","{#IFDESCR}":"%s"}' "$ifc" "$esc_descr"
+  printf '{"{IFNET_NAME}":"%s","{IFNET_DESCR}":"%s"}' "$ifc" "$esc_descr"
 done
 
-printf ']\n'
+#printf ']\n'
