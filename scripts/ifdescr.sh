@@ -40,7 +40,7 @@ for ifc in $iflist; do
 
   if [ $first -eq 0 ]; then printf ','; fi
   first=0
-  printf '{"IFNET_NAME":"%s","IFNET_DESCR":"%s"}' "$ifc" "$esc_descr"
+  printf '{"interface_name":"%s","interface_description":"%s"}' "$ifc" "$esc_descr"
 done
 
 printf ']\n'
