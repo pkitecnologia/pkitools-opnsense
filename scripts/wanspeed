@@ -1,55 +1,30 @@
 #!/bin/sh
-SOURCE_PARAM=$1
+INTERFACE_NAME=$1
+
+[ -n "$INTERFACE_NAME" ] || {
+    echo "usage: $0 INTERFACE_NAME" >&2
+    exit 1
+}
 
 # Binaries
 XMLLINT="/usr/local/bin/xmllint"
+IFCONFIG="/sbin/ifconfig"
+AWK="/usr/bin/awk"
 
-# Parse SOURCE_PARAM (ip/interface or null/interface format)
-case "$SOURCE_PARAM" in
-    */*)
-        IP_PART="${SOURCE_PARAM%%/*}"
-        INTERFACE_PART="${SOURCE_PARAM##*/}"
-        ;;
-    *)
-        # Direct IP or interface name
-        IP_PART="$SOURCE_PARAM"
-        INTERFACE_PART=""
-        ;;
-esac
+# Get physical interface name from config
+PHYSICAL_INTERFACE=$($XMLLINT --xpath "/opnsense/interfaces/$INTERFACE_NAME/if/text()" /conf/config.xml 2>/dev/null)
 
-# Resolve source IP
-if [ -z "$IP_PART" ] || [ "$IP_PART" = "null" ]; then
-    # No IP provided, need to resolve from interface
-    if [ -z "$INTERFACE_PART" ]; then
-        echo "No interface specified in SOURCE_PARAM" >&2
-        exit 1
-    fi
+if [ -z "$PHYSICAL_INTERFACE" ]; then
+    echo "Unable to resolve physical interface for $INTERFACE_NAME" >&2
+    exit 1
+fi
 
-    # Get physical interface name from config
-    PHYSICAL_INTERFACE=$($XMLLINT --xpath "/opnsense/interfaces/$INTERFACE_PART/if/text()" /conf/config.xml 2>/dev/null)
+# Get first IP address from ifconfig output
+SOURCE_IP=$($IFCONFIG "$PHYSICAL_INTERFACE" 2>/dev/null | $AWK '/inet / { print $2; exit }')
 
-    if [ -z "$PHYSICAL_INTERFACE" ]; then
-        echo "Unable to resolve physical interface for $INTERFACE_PART" >&2
-        exit 1
-    fi
-
-    # Look up gateway IP from temp file
-    GATEWAY_FILE="/tmp/${PHYSICAL_INTERFACE}_router"
-
-    if [ ! -f "$GATEWAY_FILE" ]; then
-        echo "Gateway file $GATEWAY_FILE not found" >&2
-        exit 1
-    fi
-
-    SOURCE_IP=$(cat "$GATEWAY_FILE" 2>/dev/null | head -n1)
-
-    if [ -z "$SOURCE_IP" ]; then
-        echo "Unable to read gateway IP from $GATEWAY_FILE" >&2
-        exit 1
-    fi
-else
-    # Use provided IP
-    SOURCE_IP="$IP_PART"
+if [ -z "$SOURCE_IP" ]; then
+    echo "Unable to get IP address from interface $PHYSICAL_INTERFACE" >&2
+    exit 1
 fi
 
 /usr/local/bin/speedtest-cli --secure --timeout 30 --json --source ${SOURCE_IP}
