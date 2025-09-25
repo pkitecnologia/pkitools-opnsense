@@ -10,9 +10,10 @@ INTERFACE_NAME=$1
 XMLLINT="/usr/local/bin/xmllint"
 IFCONFIG="/sbin/ifconfig"
 AWK="/usr/bin/awk"
+SUDO="/usr/local/bin/sudo"
 
 # Get physical interface name from config
-PHYSICAL_INTERFACE=$($XMLLINT --xpath "/opnsense/interfaces/$INTERFACE_NAME/if/text()" /conf/config.xml 2>/dev/null)
+PHYSICAL_INTERFACE=$($SUDO $XMLLINT --xpath "/opnsense/interfaces/$INTERFACE_NAME/if/text()" /conf/config.xml 2>/dev/null)
 
 if [ -z "$PHYSICAL_INTERFACE" ]; then
     echo "Unable to resolve physical interface for $INTERFACE_NAME" >&2

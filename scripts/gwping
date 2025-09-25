@@ -24,6 +24,7 @@ GREP="/usr/bin/grep"
 AWK="/usr/bin/awk"
 SED="/usr/bin/sed"
 XMLLINT="/usr/local/bin/xmllint"
+SUDO="/usr/local/bin/sudo"
 
 # Parse DESTINATION parameter (ip/interface format)
 IP_PART=""
@@ -49,7 +50,7 @@ if [ -z "$IP_PART" ] || [ "$IP_PART" = "null" ]; then
     fi
 
     # Get physical interface name from config
-    PHYSICAL_INTERFACE=$($XMLLINT --xpath "/opnsense/interfaces/$INTERFACE_PART/if/text()" /conf/config.xml 2>/dev/null)
+    PHYSICAL_INTERFACE=$($SUDO $XMLLINT --xpath "/opnsense/interfaces/$INTERFACE_PART/if/text()" /conf/config.xml 2>/dev/null)
 
     if [ -z "$PHYSICAL_INTERFACE" ]; then
         echo "Unable to resolve physical interface for $INTERFACE_PART" >&2
