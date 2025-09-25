@@ -3,6 +3,7 @@
 # Scripts will be downloaded from $BASE_URL/scripts/<script_filename> to /pkitools/scripts/<script_filename>
 
 wancheck pki.tools.wancheck 2
+wanspeed pki.tools.wanspeed 1
 arping pki.tools.arping 1
 arping.bin pki.tools.arping.bin 0
 cputemp pki.tools.cputemp 0
