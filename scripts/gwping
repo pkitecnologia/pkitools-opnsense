@@ -59,7 +59,7 @@ if [ -z "$IP_PART" ] || [ "$IP_PART" = "null" ]; then
         exit 1
     fi
 
-    TARGET_IP=$(cat "$GATEWAY_FILE" 2>/dev/null | head -n1)
+    TARGET_IP=$(sudo cat "$GATEWAY_FILE" 2>/dev/null | head -n1)
 
     if [ -z "$TARGET_IP" ]; then
         echo "Unable to read gateway IP from $GATEWAY_FILE" >&2
