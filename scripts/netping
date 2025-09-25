@@ -6,6 +6,8 @@
 #   latency -> average RTT in ms (number), or 0 if unavailable
 #   loss    -> packet loss percent as integer 0..100, or 100 if unavailable
 
+export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+
 OP="$1"
 DEST="$2"
 SRC="$3"
@@ -14,12 +16,6 @@ SRC="$3"
     echo "usage: $0 {latency|loss} DESTINATION [SOURCE]" >&2
     exit 1
 }
-
-# Binaries (adjust paths if needed)
-PING="/sbin/ping"
-GREP="/usr/bin/grep"
-AWK="/usr/bin/awk"
-SED="/usr/bin/sed"
 
 # Build ping params (quiet)
 PPARAM="-q"
@@ -34,14 +30,14 @@ fi
 case "$OP" in
     latency)
         # 5 probes, default interval
-        OUT=$($PING $PPARAM -c 5 "$DEST" 2>/dev/null)
+        OUT=$(ping $PPARAM -c 5 "$DEST" 2>/dev/null)
 
         # Works with FreeBSD ping "round-trip min/avg/max/stddev = a/b/c/d ms"
         # (and many Linux pings that print "rtt min/avg/max/mdev = ...")
         AVG=$(echo "$OUT" \
-            | $GREP -E "round-trip|rtt" \
-            | $AWK -F'=' '{ if (NF>1) {gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2} }' \
-            | $AWK -F'/' '{ gsub(/[[:space:]]*ms.*/,"",$2); print $2 }')
+            | grep -E "round-trip|rtt" \
+            | awk -F'=' '{ if (NF>1) {gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2} }' \
+            | awk -F'/' '{ gsub(/[[:space:]]*ms.*/,"",$2); print $2 }')
 
         if [ -z "$AVG" ]; then
             echo 0
@@ -52,12 +48,12 @@ case "$OP" in
 
     loss)
         # 50 probes, 100ms interval
-        OUT=$($PING $PPARAM -c 50 -i 0.1 "$DEST" 2>/dev/null)
+        OUT=$(ping $PPARAM -c 50 -i 0.1 "$DEST" 2>/dev/null)
 
         # Extract "<num>% packet loss" (with optional decimal)
         LOSS=$(echo "$OUT" \
-            | $GREP "packet loss" \
-            | $AWK '{for(i=1;i<=NF;i++) if($i ~ /%$/){sub("%","",$i); loss=$i}} END{if(loss=="") exit 1; print int(loss+0.5)}')
+            | grep "packet loss" \
+            | awk '{for(i=1;i<=NF;i++) if($i ~ /%$/){sub("%","",$i); loss=$i}} END{if(loss=="") exit 1; print int(loss+0.5)}')
 
         if [ -z "$LOSS" ]; then
             echo 100
