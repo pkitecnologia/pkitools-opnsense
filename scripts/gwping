@@ -23,7 +23,7 @@ PING="/sbin/ping"
 GREP="/usr/bin/grep"
 AWK="/usr/bin/awk"
 SED="/usr/bin/sed"
-XMLLINT="/usr/bin/xmllint"
+XMLLINT="/usr/local/bin/xmllint"
 
 # Parse DESTINATION parameter (ip/interface format)
 IP_PART=""
