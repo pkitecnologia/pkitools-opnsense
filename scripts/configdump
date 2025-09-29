@@ -1,2 +1,3 @@
 #!/bin/sh
-/usr/local/bin/sudo /bin/cat /conf/config.xml
+XPATH=$1
+/usr/local/bin/sudo /bin/cat /conf/config.xml | /usr/local/bin/xmllint --format --xpath "${XPATH}" -
