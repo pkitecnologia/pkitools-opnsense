@@ -1,2 +1,2 @@
 #!/bin/sh
-/sbin/sysctl dev.cpu. | /usr/bin/grep temperature | /usr/bin/awk -F': ' '{ gsub(/C/, "", $2); sum += $2; count++ } END { if (count > 0) printf "%.1f\n", sum/count }'
+/sbin/sysctl dev.cpu. | /usr/bin/grep temperature | /usr/bin/awk -F': ' '{ gsub(/C/, "", $2); sum += $2; count++ } END { if (count > 0) printf "%.1f\n", sum/count; else print "0.0" }'
