@@ -1,2 +1,2 @@
-#!/usr/local/bin/bash
-/sbin/sysctl dev.cpu.0 | /usr/bin/grep temperature | /usr/bin/grep -o '[0-9]\?[0-9][0-9]\.[0-9]'
+#!/bin/sh
+/sbin/sysctl dev.cpu. | /usr/bin/grep temperature | /usr/bin/awk -F': ' '{ gsub(/C/, "", $2); sum += $2; count++ } END { if (count > 0) printf "%.1f\n", sum/count }'
