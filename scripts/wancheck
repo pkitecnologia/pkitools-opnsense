@@ -1,29 +1,52 @@
-#!/usr/local/bin/bash
+#!/bin/sh
 INTERFACE="$1"
 
-CHECKHOSTS[0]="a.root-servers.net"
-CHECKHOSTS[1]="b.root-servers.net"
-CHECKHOSTS[2]="c.root-servers.net"
-CHECKHOSTS[3]="e.root-servers.net"
-CHECKHOSTS[4]="f.root-servers.net"
-CHECKHOSTS[5]="i.root-servers.net"
-CHECKHOSTS[6]="j.root-servers.net"
-CHECKHOSTS[7]="k.root-servers.net"
-CHECKHOSTS[8]="l.root-servers.net"
-CHECKHOSTS[9]="m.root-servers.net"
+# POSIX-compatible host list (space-separated)
+CHECKHOSTS="a.root-servers.net b.root-servers.net c.root-servers.net e.root-servers.net f.root-servers.net i.root-servers.net j.root-servers.net k.root-servers.net l.root-servers.net m.root-servers.net"
 
-if ! [ -z "${INTERFACE}" ]
-then
+if [ -n "${INTERFACE}" ]; then
         IP=$(/sbin/ifconfig ${INTERFACE} | /usr/bin/grep 'inet ' | /usr/bin/grep -v 0xffffffff | /usr/bin/awk '{print $2}')
         PINGPARAM="-W 1000 -S ${IP}"
 fi
 
-SIZE=${#CHECKHOSTS[@]}
-INDEX=$(($RANDOM % $SIZE))
+# Count hosts and get random starting index
+HOST_COUNT=10
+INDEX=$(($(head -c2 /dev/urandom | od -tu2 -N2 -An | tr -d ' ') % HOST_COUNT))
 
-for (( i=$INDEX; i<=($INDEX + 9); i++ )); do
-        HOST=$(($i % 10))
-        /sbin/ping -c 1 ${PINGPARAM} ${CHECKHOSTS[$HOST]} 1>/dev/null 2>&1 && echo -n 1 && exit 0
+# Convert space-separated list to indexed access
+i=0
+for host in $CHECKHOSTS; do
+        if [ $i -eq $INDEX ]; then
+                FIRST_HOST="$host"
+                break
+        fi
+        i=$((i + 1))
 done
+
+# Try up to 10 hosts starting from random index
+attempts=0
+current_index=$INDEX
+for host in $CHECKHOSTS; do
+        if [ $attempts -ge 10 ]; then
+                break
+        fi
+
+        # Calculate current position in list
+        pos=0
+        for h in $CHECKHOSTS; do
+                if [ "$h" = "$host" ]; then
+                        break
+                fi
+                pos=$((pos + 1))
+        done
+
+        # Check if this is the host we want to test
+        test_index=$((($INDEX + $attempts) % $HOST_COUNT))
+        if [ $pos -eq $test_index ]; then
+                /sbin/ping -c 1 ${PINGPARAM} ${host} 1>/dev/null 2>&1 && echo -n 1 && exit 0
+                attempts=$((attempts + 1))
+        fi
+done
+
 echo -n 0
 exit 1
