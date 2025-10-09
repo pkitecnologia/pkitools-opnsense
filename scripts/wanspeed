@@ -8,20 +8,8 @@ INTERFACE_NAME=$1
 
 export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
 
-# Get physical interface name from config
-PHYSICAL_INTERFACE=$(sudo xmllint --xpath "/opnsense/interfaces/$INTERFACE_NAME/if/text()" /conf/config.xml 2>/dev/null)
-
-if [ -z "$PHYSICAL_INTERFACE" ]; then
-    echo "Unable to resolve physical interface for $INTERFACE_NAME" >&2
-    exit 1
-fi
-
-# Get first IP address from ifconfig output
-SOURCE_IP=$(ifconfig "$PHYSICAL_INTERFACE" 2>/dev/null | awk '/inet / { print $2; exit }')
-
-if [ -z "$SOURCE_IP" ]; then
-    echo "Unable to get IP address from interface $PHYSICAL_INTERFACE" >&2
-    exit 1
-fi
+# Get IP address for the interface
+SCRIPT_DIR=$(dirname "$0")
+SOURCE_IP=$("$SCRIPT_DIR/ifaddr" "$INTERFACE_NAME") || exit 1
 
 /usr/local/bin/speedtest-cli --secure --timeout 30 --json --source ${SOURCE_IP}

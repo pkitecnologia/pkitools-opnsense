@@ -19,7 +19,6 @@ SRC="$3"
 
 # Build ping params (quiet)
 PPARAM="-q"
-# Choose -S (source address) if SRC looks like IP, else -I (interface)
 if [ -n "$SRC" ]; then
     PPARAM="$PPARAM -S $SRC"
 fi

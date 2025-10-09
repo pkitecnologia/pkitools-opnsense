@@ -1,0 +1,31 @@
+#!/bin/sh
+# Resolve OPNsense interface config name to its IP address
+# Usage: $0 INTERFACE_NAME
+# Output: IP address of the interface, or error if not found
+
+INTERFACE_NAME=$1
+
+[ -n "$INTERFACE_NAME" ] || {
+    echo "usage: $0 INTERFACE_NAME" >&2
+    exit 1
+}
+
+export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+
+# Get physical interface name from config
+PHYSICAL_INTERFACE=$(sudo xmllint --xpath "/opnsense/interfaces/$INTERFACE_NAME/if/text()" /conf/config.xml 2>/dev/null)
+
+if [ -z "$PHYSICAL_INTERFACE" ]; then
+    echo "Unable to resolve physical interface for $INTERFACE_NAME" >&2
+    exit 1
+fi
+
+# Get first IP address from ifconfig output
+SOURCE_IP=$(ifconfig "$PHYSICAL_INTERFACE" 2>/dev/null | awk '/inet / { print $2; exit }')
+
+if [ -z "$SOURCE_IP" ]; then
+    echo "Unable to get IP address from interface $PHYSICAL_INTERFACE" >&2
+    exit 1
+fi
+
+echo "$SOURCE_IP"
