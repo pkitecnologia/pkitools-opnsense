@@ -21,10 +21,7 @@ SRC="$3"
 PPARAM="-q"
 # Choose -S (source address) if SRC looks like IP, else -I (interface)
 if [ -n "$SRC" ]; then
-    case "$SRC" in
-        *.*|*:* ) PPARAM="$PPARAM -S $SRC" ;;
-        * )       PPARAM="$PPARAM -I $SRC" ;;
-    esac
+    PPARAM="$PPARAM -S $SRC"
 fi
 
 case "$OP" in
