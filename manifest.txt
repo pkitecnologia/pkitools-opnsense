@@ -11,3 +11,4 @@ ifdescr pki.tools.netdiscover 0
 configdump pki.tools.configdump 1
 netping pki.tools.netping 3
 gwping pki.tools.gwping 3
+statetable pki.statetable 0

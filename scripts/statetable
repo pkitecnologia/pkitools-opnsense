@@ -1,0 +1,5 @@
+#!/bin/sh
+export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+
+sudo pfctl -si |\
+    awk '/current entries/ {used=$3} END {cmd="sudo pfctl -sm | awk \"/states/{print \\\$4}\""; cmd | getline limit; close(cmd); printf("%.2f\n", used/limit*100)}'
