@@ -19,8 +19,26 @@ SRC="$3"
 
 # Build ping params (quiet)
 PPARAM="-q"
+# If SRC is provided, resolve it to an IP if it's an interface config name
 if [ -n "$SRC" ]; then
-    PPARAM="$PPARAM -S $SRC"
+    # Check if SRC looks like an IP address (contains dots for IPv4)
+    case "$SRC" in
+        *.*)
+            # Already an IP address
+            PPARAM="$PPARAM -S $SRC"
+            ;;
+        *)
+            # Assume it's an interface config name, resolve to IP
+            SCRIPT_DIR=$(dirname "$0")
+            SRC_IP=$("$SCRIPT_DIR/ifaddr" "$SRC" 2>/dev/null)
+            if [ -n "$SRC_IP" ]; then
+                PPARAM="$PPARAM -S $SRC_IP"
+            else
+                # If resolution fails, treat it as a literal value (could be interface name)
+                PPARAM="$PPARAM -S $SRC"
+            fi
+            ;;
+    esac
 fi
 
 case "$OP" in
