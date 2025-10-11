@@ -55,8 +55,18 @@ def get_dhcp_gateway(if_name):
 def parse_config(config_path='/conf/config.xml'):
     """Parse OPNsense config and extract interface/gateway information."""
     try:
-        tree = etree.parse(config_path)
-        root = tree.getroot()
+        # Use sudo to read the config file if it's the default path
+        if config_path == '/conf/config.xml':
+            result = subprocess.run(['sudo', 'cat', config_path],
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                print(f"Error reading config file: {result.stderr}", file=sys.stderr)
+                sys.exit(1)
+            root = etree.fromstring(result.stdout.encode())
+        else:
+            # For testing with alternative paths, read directly
+            tree = etree.parse(config_path)
+            root = tree.getroot()
     except Exception as e:
         print(f"Error parsing config file: {e}", file=sys.stderr)
         sys.exit(1)
