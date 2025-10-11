@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""
+netdiscover - Extract network interface and gateway information from OPNsense config
+Outputs JSON with combined interface and gateway details for enabled interfaces only.
+"""
+
+import json
+import subprocess
+import sys
+from lxml import etree
+
+
+def get_text(element, tag):
+    """Get text from XML element, return None if empty or not found."""
+    elem = element.find(tag)
+    if elem is None:
+        return None
+    text = elem.text
+    if text is None or text.strip() == '':
+        return None
+    return text.strip()
+
+
+def get_dhcp_ip(if_name):
+    """Get IP address for DHCP interface using ifconfig."""
+    try:
+        result = subprocess.run(['ifconfig', if_name],
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            # Parse ifconfig output for inet address
+            for line in result.stdout.split('\n'):
+                line = line.strip()
+                if line.startswith('inet '):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        # Return first IP address (parts[1])
+                        return parts[1]
+    except Exception:
+        pass
+    return None
+
+
+def get_dhcp_gateway(if_name):
+    """Get gateway for DHCP interface from /tmp/<if_name>_router."""
+    try:
+        with open(f'/tmp/{if_name}_router', 'r') as f:
+            gateway = f.read().strip()
+            if gateway:
+                return gateway
+    except Exception:
+        pass
+    return None
+
+
+def parse_config(config_path='/conf/config.xml'):
+    """Parse OPNsense config and extract interface/gateway information."""
+    try:
+        tree = etree.parse(config_path)
+        root = tree.getroot()
+    except Exception as e:
+        print(f"Error parsing config file: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Parse interfaces
+    interfaces = {}
+    interfaces_elem = root.find('interfaces')
+    if interfaces_elem is None:
+        return []
+
+    for iface_elem in interfaces_elem:
+        iface_tag = iface_elem.tag
+
+        # Check if interface is enabled
+        enabled = get_text(iface_elem, 'enable')
+        if enabled != '1':
+            continue
+
+        if_name = get_text(iface_elem, 'if')
+        if not if_name:
+            continue
+
+        if_descr = get_text(iface_elem, 'descr')
+        if_addr = get_text(iface_elem, 'ipaddr')
+
+        # Handle DHCP interfaces (ipaddr set to "dhcp")
+        is_dhcp = if_addr == 'dhcp'
+        if is_dhcp:
+            if_addr = get_dhcp_ip(if_name)
+
+        # Build interface info
+        iface_info = {
+            'if_name': if_name,
+            'tag': iface_tag,  # Store tag for gateway matching
+            'is_dhcp': is_dhcp
+        }
+
+        if if_descr:
+            iface_info['if_descr'] = if_descr
+        if if_addr:
+            iface_info['if_addr'] = if_addr
+
+        interfaces[iface_tag] = iface_info
+
+    # Parse gateways
+    gateways = {}
+    gateways_elem = root.find('.//OPNsense/Gateways')
+    if gateways_elem is not None:
+        for gw_elem in gateways_elem.findall('gateway_item'):
+            # Check if gateway is disabled
+            disabled = get_text(gw_elem, 'disabled')
+            if disabled == '1':
+                continue
+
+            iface_tag = get_text(gw_elem, 'interface')
+            if not iface_tag:
+                continue
+
+            gw_name = get_text(gw_elem, 'name')
+            gw_descr = get_text(gw_elem, 'descr')
+            gw_nexthop = get_text(gw_elem, 'gateway')
+            gw_monitor = get_text(gw_elem, 'monitor')
+
+            gw_info = {}
+            if gw_name:
+                gw_info['gw_name'] = gw_name
+            if gw_descr:
+                gw_info['gw_descr'] = gw_descr
+            if gw_nexthop:
+                gw_info['gw_nexthop'] = gw_nexthop
+            if gw_monitor:
+                gw_info['gw_monitor'] = gw_monitor
+
+            if gw_info:  # Only add if we have at least some gateway info
+                gateways[iface_tag] = gw_info
+
+    # Combine interface and gateway information
+    results = []
+    for iface_tag, iface_info in interfaces.items():
+        # Build output dict
+        output = {}
+
+        # Add interface info (remove internal fields)
+        is_dhcp = iface_info.pop('is_dhcp', False)
+        iface_info.pop('tag', None)
+        output.update(iface_info)
+
+        # Add gateway info if exists
+        if iface_tag in gateways:
+            gw_info = gateways[iface_tag]
+
+            # Handle DHCP gateway
+            if is_dhcp and 'gw_nexthop' not in gw_info:
+                dhcp_gw = get_dhcp_gateway(output.get('if_name'))
+                if dhcp_gw:
+                    gw_info['gw_nexthop'] = dhcp_gw
+
+            output.update(gw_info)
+
+        results.append(output)
+
+    return results
+
+
+def main():
+    """Main entry point."""
+    config_path = '/conf/config.xml'
+
+    # Allow override for testing
+    if len(sys.argv) > 1:
+        config_path = sys.argv[1]
+
+    results = parse_config(config_path)
+    print(json.dumps(results, indent=2))
+
+
+if __name__ == '__main__':
+    main()
