@@ -135,7 +135,7 @@ def parse_config(config_path='/conf/config.xml', mode='interfaces'):
 
             gw_name = get_text(gw_elem, 'name')
             gw_descr = get_text(gw_elem, 'descr')
-            gw_nexthop = get_text(gw_elem, 'gateway')
+            gw_gateway = get_text(gw_elem, 'gateway')
             gw_monitor = get_text(gw_elem, 'monitor')
 
             gw_info = {}
@@ -143,8 +143,8 @@ def parse_config(config_path='/conf/config.xml', mode='interfaces'):
                 gw_info['gw_name'] = gw_name
             if gw_descr:
                 gw_info['gw_descr'] = gw_descr
-            if gw_nexthop:
-                gw_info['gw_nexthop'] = gw_nexthop
+            if gw_gateway:
+                gw_info['gw_gateway'] = gw_gateway
             if gw_monitor:
                 gw_info['gw_monitor'] = gw_monitor
 
@@ -177,7 +177,7 @@ def parse_config(config_path='/conf/config.xml', mode='interfaces'):
                 'if_addr': iface_info.get('if_addr', ''),
                 'gw_name': '',
                 'gw_descr': '',
-                'gw_nexthop': '',
+                'gw_gateway': '',
                 'gw_monitor': ''
             }
 
@@ -186,18 +186,18 @@ def parse_config(config_path='/conf/config.xml', mode='interfaces'):
 
             # Handle DHCP gateway
             is_dhcp = iface_info.get('is_dhcp', False)
-            if is_dhcp and 'gw_nexthop' not in gw_info:
+            if is_dhcp and 'gw_gateway' not in gw_info:
                 dhcp_gw = get_dhcp_gateway(iface_info.get('if_name'))
                 if dhcp_gw:
-                    gw_info['gw_nexthop'] = dhcp_gw
+                    gw_info['gw_gateway'] = dhcp_gw
 
             # Update gateway fields
             if 'gw_name' in gw_info:
                 output['gw_name'] = gw_info['gw_name']
             if 'gw_descr' in gw_info:
                 output['gw_descr'] = gw_info['gw_descr']
-            if 'gw_nexthop' in gw_info:
-                output['gw_nexthop'] = gw_info['gw_nexthop']
+            if 'gw_gateway' in gw_info:
+                output['gw_gateway'] = gw_info['gw_gateway']
             if 'gw_monitor' in gw_info:
                 output['gw_monitor'] = gw_info['gw_monitor']
 
