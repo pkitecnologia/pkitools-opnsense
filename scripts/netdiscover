@@ -146,25 +146,37 @@ def parse_config(config_path='/conf/config.xml'):
     # Combine interface and gateway information
     results = []
     for iface_tag, iface_info in interfaces.items():
-        # Build output dict
-        output = {}
-
-        # Add interface info (remove internal fields)
-        is_dhcp = iface_info.pop('is_dhcp', False)
-        iface_info.pop('tag', None)
-        output.update(iface_info)
+        # Build output dict with all fields
+        output = {
+            'if_name': iface_info.get('if_name', ''),
+            'if_descr': iface_info.get('if_descr', ''),
+            'if_addr': iface_info.get('if_addr', ''),
+            'gw_name': '',
+            'gw_descr': '',
+            'gw_nexthop': '',
+            'gw_monitor': ''
+        }
 
         # Add gateway info if exists
         if iface_tag in gateways:
             gw_info = gateways[iface_tag]
 
             # Handle DHCP gateway
+            is_dhcp = iface_info.get('is_dhcp', False)
             if is_dhcp and 'gw_nexthop' not in gw_info:
-                dhcp_gw = get_dhcp_gateway(output.get('if_name'))
+                dhcp_gw = get_dhcp_gateway(iface_info.get('if_name'))
                 if dhcp_gw:
                     gw_info['gw_nexthop'] = dhcp_gw
 
-            output.update(gw_info)
+            # Update gateway fields
+            if 'gw_name' in gw_info:
+                output['gw_name'] = gw_info['gw_name']
+            if 'gw_descr' in gw_info:
+                output['gw_descr'] = gw_info['gw_descr']
+            if 'gw_nexthop' in gw_info:
+                output['gw_nexthop'] = gw_info['gw_nexthop']
+            if 'gw_monitor' in gw_info:
+                output['gw_monitor'] = gw_info['gw_monitor']
 
         results.append(output)
 
