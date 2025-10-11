@@ -1,15 +1,3 @@
 #!/bin/sh
-INTERFACE_NAME=$1
-
-[ -n "$INTERFACE_NAME" ] || {
-    echo "usage: $0 INTERFACE_NAME" >&2
-    exit 1
-}
-
-export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
-
-# Get IP address for the interface
-SCRIPT_DIR=$(dirname "$0")
-SOURCE_IP=$("$SCRIPT_DIR/ifaddr" "$INTERFACE_NAME") || exit 1
-
+SOURCE_IP=$1
 /usr/local/bin/speedtest-cli --secure --timeout 30 --json --source ${SOURCE_IP}
