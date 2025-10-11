@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 """
 netdiscover - Extract network interface and gateway information from OPNsense config
-Outputs JSON with combined interface and gateway details for enabled interfaces only.
+
+Usage:
+  netdiscover <mode> [config_path]
+
+  mode: 'interfaces' or 'gateways' (required)
+  config_path: Path to config.xml (optional, default: /conf/config.xml)
+
+  - interfaces: Output only if_* fields for all enabled interfaces
+  - gateways: Output all fields only for interfaces that have gateways attached
 """
 
 import json
@@ -52,7 +60,7 @@ def get_dhcp_gateway(if_name):
     return None
 
 
-def parse_config(config_path='/conf/config.xml'):
+def parse_config(config_path='/conf/config.xml', mode='interfaces'):
     """Parse OPNsense config and extract interface/gateway information."""
     try:
         # Use sudo to read the config file if it's the default path
@@ -143,22 +151,37 @@ def parse_config(config_path='/conf/config.xml'):
             if gw_info:  # Only add if we have at least some gateway info
                 gateways[iface_tag] = gw_info
 
-    # Combine interface and gateway information
+    # Combine interface and gateway information based on mode
     results = []
-    for iface_tag, iface_info in interfaces.items():
-        # Build output dict with all fields
-        output = {
-            'if_name': iface_info.get('if_name', ''),
-            'if_descr': iface_info.get('if_descr', ''),
-            'if_addr': iface_info.get('if_addr', ''),
-            'gw_name': '',
-            'gw_descr': '',
-            'gw_nexthop': '',
-            'gw_monitor': ''
-        }
 
-        # Add gateway info if exists
-        if iface_tag in gateways:
+    if mode == 'interfaces':
+        # Output only if_* fields for all enabled interfaces
+        for iface_tag, iface_info in interfaces.items():
+            output = {
+                'if_name': iface_info.get('if_name', ''),
+                'if_descr': iface_info.get('if_descr', ''),
+                'if_addr': iface_info.get('if_addr', '')
+            }
+            results.append(output)
+
+    elif mode == 'gateways':
+        # Output all fields only for interfaces with gateways
+        for iface_tag, iface_info in interfaces.items():
+            # Only include interfaces that have a gateway
+            if iface_tag not in gateways:
+                continue
+
+            output = {
+                'if_name': iface_info.get('if_name', ''),
+                'if_descr': iface_info.get('if_descr', ''),
+                'if_addr': iface_info.get('if_addr', ''),
+                'gw_name': '',
+                'gw_descr': '',
+                'gw_nexthop': '',
+                'gw_monitor': ''
+            }
+
+            # Add gateway info
             gw_info = gateways[iface_tag]
 
             # Handle DHCP gateway
@@ -178,20 +201,28 @@ def parse_config(config_path='/conf/config.xml'):
             if 'gw_monitor' in gw_info:
                 output['gw_monitor'] = gw_info['gw_monitor']
 
-        results.append(output)
+            results.append(output)
+
+    else:
+        print(f"Error: Invalid mode '{mode}'. Use 'interfaces' or 'gateways'.", file=sys.stderr)
+        sys.exit(1)
 
     return results
 
 
 def main():
     """Main entry point."""
-    config_path = '/conf/config.xml'
+    # Parse command line arguments
+    if len(sys.argv) < 2:
+        print("Usage: netdiscover <mode> [config_path]", file=sys.stderr)
+        print("  mode: 'interfaces' or 'gateways' (required)", file=sys.stderr)
+        print("  config_path: Path to config.xml (optional, default: /conf/config.xml)", file=sys.stderr)
+        sys.exit(1)
 
-    # Allow override for testing
-    if len(sys.argv) > 1:
-        config_path = sys.argv[1]
+    mode = sys.argv[1]
+    config_path = sys.argv[2] if len(sys.argv) > 2 else '/conf/config.xml'
 
-    results = parse_config(config_path)
+    results = parse_config(config_path, mode)
     print(json.dumps(results, indent=2))
 
 
