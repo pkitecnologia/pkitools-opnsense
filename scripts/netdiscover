@@ -172,12 +172,12 @@ def parse_config(config_path='/conf/config.xml', mode='interfaces'):
                 continue
 
             output = {
+                'gw_gateway': '',
                 'if_name': iface_info.get('if_name', ''),
                 'if_descr': iface_info.get('if_descr', ''),
                 'if_addr': iface_info.get('if_addr', ''),
                 'gw_name': '',
                 'gw_descr': '',
-                'gw_gateway': '',
                 'gw_monitor': ''
             }
 
