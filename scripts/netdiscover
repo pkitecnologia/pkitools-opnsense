@@ -173,10 +173,22 @@ def parse_config(config_path='/conf/config.xml', mode='interfaces'):
             if iface_tag not in gateways:
                 continue
 
+            # Get interface name and address
+            if_name = iface_info.get('if_name', '')
+            if_addr = iface_info.get('if_addr', '')
+
+            # Skip WireGuard interfaces (wg0, wg1, wg2, etc.)
+            if if_name.startswith('wg') and len(if_name) > 2 and if_name[2:].isdigit():
+                continue
+
+            # Skip interfaces with empty IP address
+            if not if_addr or if_addr.strip() == '':
+                continue
+
             output = {
-                'if_name': iface_info.get('if_name', ''),
+                'if_name': if_name,
                 'if_descr': iface_info.get('if_descr', ''),
-                'if_addr': iface_info.get('if_addr', ''),
+                'if_addr': if_addr,
                 'gw_name': '',
                 'gw_descr': '',
                 'gw_nexthop': '',
@@ -189,7 +201,7 @@ def parse_config(config_path='/conf/config.xml', mode='interfaces'):
             # Handle DHCP gateway
             is_dhcp = iface_info.get('is_dhcp', False)
             if is_dhcp and 'gw_nexthop' not in gw_info:
-                dhcp_gw = get_dhcp_gateway(iface_info.get('if_name'))
+                dhcp_gw = get_dhcp_gateway(if_name)
                 if dhcp_gw:
                     gw_info['gw_nexthop'] = dhcp_gw
 
