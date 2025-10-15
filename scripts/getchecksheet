@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""
+getchecksheet - Fetch network check configuration from Google Sheets
+
+Usage:
+  getchecksheet <api_key> <spreadsheet_id> <check_type> <network_id> [sheet_range]
+
+  api_key: Google Sheets API key
+  spreadsheet_id: Google Sheets spreadsheet ID (from URL)
+  check_type: Filter by CheckType column value (TCP or ICMP)
+  network_id: Filter by NetworkID column value
+  sheet_range: Optional sheet range (default: Sheet1)
+
+Output:
+  JSON array suitable for Zabbix LLD discovery rules
+  Columns are auto-detected from the first row of the spreadsheet
+"""
+
+import json
+import sys
+import urllib.request
+import urllib.error
+import ssl
+
+
+def fetch_sheet_data(spreadsheet_id, api_key, sheet_range='Sheet1'):
+    """Fetch data from Google Sheets using API v4."""
+    # Build API URL
+    base_url = 'https://sheets.googleapis.com/v4/spreadsheets'
+    url = f'{base_url}/{spreadsheet_id}/values/{sheet_range}?key={api_key}'
+
+    try:
+        # Create SSL context
+        context = ssl.create_default_context()
+
+        # Make request
+        with urllib.request.urlopen(url, context=context, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+
+        # Extract values from response
+        if 'values' not in data:
+            print("Error: No data found in spreadsheet", file=sys.stderr)
+            sys.exit(1)
+
+        return data['values']
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        print(f"HTTP Error {e.code}: {error_body}", file=sys.stderr)
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        print(f"URL Error: {e.reason}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error fetching spreadsheet: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def parse_sheet_data(values, network_id, check_type):
+    """Parse sheet data and filter by NetworkID and CheckType."""
+    if not values or len(values) < 2:
+        print("Error: Spreadsheet must have at least a header row and one data row", file=sys.stderr)
+        sys.exit(1)
+
+    # First row contains headers
+    headers = values[0]
+
+    # Find column indices for NetworkID and CheckType
+    try:
+        network_id_idx = headers.index('NetworkID')
+    except ValueError:
+        print("Error: 'NetworkID' column not found in spreadsheet", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        check_type_idx = headers.index('CheckType')
+    except ValueError:
+        print("Error: 'CheckType' column not found in spreadsheet", file=sys.stderr)
+        sys.exit(1)
+
+    # Filter and build result
+    results = []
+
+    for row in values[1:]:  # Skip header row
+        # Skip empty rows
+        if not row:
+            continue
+
+        # Pad row with empty strings if it's shorter than headers
+        while len(row) < len(headers):
+            row.append('')
+
+        # Check filters
+        row_network_id = row[network_id_idx] if network_id_idx < len(row) else ''
+        row_check_type = row[check_type_idx] if check_type_idx < len(row) else ''
+
+        # Apply filters (case-insensitive comparison)
+        if row_network_id.strip().lower() != network_id.lower():
+            continue
+        if row_check_type.strip().upper() != check_type.upper():
+            continue
+
+        # Build output object with all columns
+        result = {}
+        for i, header in enumerate(headers):
+            value = row[i] if i < len(row) else ''
+            result[header] = value.strip()
+
+        results.append(result)
+
+    return results
+
+
+def main():
+    """Main entry point."""
+    # Parse command line arguments
+    if len(sys.argv) < 5:
+        print("Usage: getchecksheet <api_key> <spreadsheet_id> <check_type> <network_id> [sheet_range]", file=sys.stderr)
+        print("  api_key: Google Sheets API key", file=sys.stderr)
+        print("  spreadsheet_id: Google Sheets spreadsheet ID (from URL)", file=sys.stderr)
+        print("  check_type: Filter by CheckType column value (TCP or ICMP)", file=sys.stderr)
+        print("  network_id: Filter by NetworkID column value", file=sys.stderr)
+        print("  sheet_range: Optional sheet range (default: Sheet1)", file=sys.stderr)
+        sys.exit(1)
+
+    api_key = sys.argv[1]
+    spreadsheet_id = sys.argv[2]
+    check_type = sys.argv[3]
+    network_id = sys.argv[4]
+    sheet_range = sys.argv[5] if len(sys.argv) > 5 else 'Sheet1'
+
+    # Fetch data from Google Sheets
+    values = fetch_sheet_data(spreadsheet_id, api_key, sheet_range)
+
+    # Parse and filter data
+    results = parse_sheet_data(values, network_id, check_type)
+
+    # Output JSON
+    print(json.dumps(results, indent=2))
+
+
+if __name__ == '__main__':
+    main()
