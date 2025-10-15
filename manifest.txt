@@ -3,7 +3,7 @@
 # Scripts will be downloaded from $BASE_URL/scripts/<script_filename> to /pkitools/scripts/<script_filename>
 
 netdiscover pki.tools.netdiscover 1
-getchecksheet pki.tools.getchecksheet 4
+getchecksheet pki.tools.getchecksheet 3
 configdump pki.tools.configdump 1
 wancheck pki.tools.wancheck 2
 wanspeed pki.tools.wanspeed 1

@@ -3,13 +3,15 @@
 getchecksheet - Fetch network check configuration from Google Sheets
 
 Usage:
-  getchecksheet <api_key> <spreadsheet_id> <check_type> <network_id> [sheet_range]
+  getchecksheet <api_key> <spreadsheet_id> <check_type> [sheet_range]
 
   api_key: Google Sheets API key
   spreadsheet_id: Google Sheets spreadsheet ID (from URL)
   check_type: Filter by CheckType column value (TCP or ICMP)
-  network_id: Filter by NetworkID column value
   sheet_range: Optional sheet range (default: Sheet1)
+
+  The hostname is automatically detected from the system and used to filter
+  by the 'Hostname' column in the spreadsheet.
 
 Output:
   JSON array suitable for Zabbix LLD discovery rules
@@ -17,6 +19,7 @@ Output:
 """
 
 import json
+import socket
 import sys
 import urllib.request
 import urllib.error
@@ -56,8 +59,8 @@ def fetch_sheet_data(spreadsheet_id, api_key, sheet_range='Sheet1'):
         sys.exit(1)
 
 
-def parse_sheet_data(values, network_id, check_type):
-    """Parse sheet data and filter by NetworkID and CheckType."""
+def parse_sheet_data(values, hostname, check_type):
+    """Parse sheet data and filter by Hostname and CheckType."""
     if not values or len(values) < 2:
         print("Error: Spreadsheet must have at least a header row and one data row", file=sys.stderr)
         sys.exit(1)
@@ -65,11 +68,11 @@ def parse_sheet_data(values, network_id, check_type):
     # First row contains headers
     headers = values[0]
 
-    # Find column indices for NetworkID and CheckType
+    # Find column indices for Hostname and CheckType
     try:
-        network_id_idx = headers.index('NetworkID')
+        hostname_idx = headers.index('Hostname')
     except ValueError:
-        print("Error: 'NetworkID' column not found in spreadsheet", file=sys.stderr)
+        print("Error: 'Hostname' column not found in spreadsheet", file=sys.stderr)
         sys.exit(1)
 
     try:
@@ -91,11 +94,11 @@ def parse_sheet_data(values, network_id, check_type):
             row.append('')
 
         # Check filters
-        row_network_id = row[network_id_idx] if network_id_idx < len(row) else ''
+        row_hostname = row[hostname_idx] if hostname_idx < len(row) else ''
         row_check_type = row[check_type_idx] if check_type_idx < len(row) else ''
 
         # Apply filters (case-insensitive comparison)
-        if row_network_id.strip().lower() != network_id.lower():
+        if row_hostname.strip().lower() != hostname.lower():
             continue
         if row_check_type.strip().upper() != check_type.upper():
             continue
@@ -114,26 +117,29 @@ def parse_sheet_data(values, network_id, check_type):
 def main():
     """Main entry point."""
     # Parse command line arguments
-    if len(sys.argv) < 5:
-        print("Usage: getchecksheet <api_key> <spreadsheet_id> <check_type> <network_id> [sheet_range]", file=sys.stderr)
+    if len(sys.argv) < 4:
+        print("Usage: getchecksheet <api_key> <spreadsheet_id> <check_type> [sheet_range]", file=sys.stderr)
         print("  api_key: Google Sheets API key", file=sys.stderr)
         print("  spreadsheet_id: Google Sheets spreadsheet ID (from URL)", file=sys.stderr)
         print("  check_type: Filter by CheckType column value (TCP or ICMP)", file=sys.stderr)
-        print("  network_id: Filter by NetworkID column value", file=sys.stderr)
         print("  sheet_range: Optional sheet range (default: Sheet1)", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("  Hostname is automatically detected from the system", file=sys.stderr)
         sys.exit(1)
 
     api_key = sys.argv[1]
     spreadsheet_id = sys.argv[2]
     check_type = sys.argv[3]
-    network_id = sys.argv[4]
-    sheet_range = sys.argv[5] if len(sys.argv) > 5 else 'Sheet1'
+    sheet_range = sys.argv[4] if len(sys.argv) > 4 else 'Sheet1'
+
+    # Get hostname from the system
+    hostname = socket.gethostname()
 
     # Fetch data from Google Sheets
     values = fetch_sheet_data(spreadsheet_id, api_key, sheet_range)
 
     # Parse and filter data
-    results = parse_sheet_data(values, network_id, check_type)
+    results = parse_sheet_data(values, hostname, check_type)
 
     # Output JSON
     print(json.dumps(results, indent=2))
