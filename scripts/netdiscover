@@ -51,7 +51,7 @@ def get_dhcp_ip(if_name):
 def get_dhcp_gateway(if_name):
     """Get gateway for DHCP interface from /tmp/<if_name>_router."""
     try:
-        result = subprocess.run(['sudo', 'cat', f'/tmp/{if_name}_router'],
+        result = subprocess.run(['/usr/local/bin/sudo', 'cat', f'/tmp/{if_name}_router'],
                               capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             gateway = result.stdout.strip()
@@ -67,7 +67,7 @@ def parse_config(config_path='/conf/config.xml', mode='interfaces'):
     try:
         # Use sudo to read the config file if it's the default path
         if config_path == '/conf/config.xml':
-            result = subprocess.run(['sudo', 'cat', config_path],
+            result = subprocess.run(['/usr/local/bin/sudo', 'cat', config_path],
                                   capture_output=True, text=True, timeout=10)
             if result.returncode != 0:
                 print(f"Error reading config file: {result.stderr}", file=sys.stderr)
