@@ -68,7 +68,7 @@ def parse_sheet_data(values, hostname, check_type):
     # First row contains headers
     headers = values[0]
 
-    # Find column indices for Hostname and CheckType
+    # Find column indices for required fields
     try:
         hostname_idx = headers.index('Hostname')
     except ValueError:
@@ -81,10 +81,29 @@ def parse_sheet_data(values, hostname, check_type):
         print("Error: 'CheckType' column not found in spreadsheet", file=sys.stderr)
         sys.exit(1)
 
+    try:
+        check_name_idx = headers.index('CheckName')
+    except ValueError:
+        print("Error: 'CheckName' column not found in spreadsheet", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        check_host_idx = headers.index('CheckHost')
+    except ValueError:
+        print("Error: 'CheckHost' column not found in spreadsheet", file=sys.stderr)
+        sys.exit(1)
+
+    # CheckPort is optional for ICMP, so we find it but don't require it
+    try:
+        check_port_idx = headers.index('CheckPort')
+    except ValueError:
+        check_port_idx = None
+
     # Filter and build result
     results = []
+    seen_checks = set()  # Track (hostname, checkname, checktype) to detect duplicates
 
-    for row in values[1:]:  # Skip header row
+    for row_num, row in enumerate(values[1:], start=2):  # Skip header row, start=2 for line numbering
         # Skip empty rows
         if not row:
             continue
@@ -100,7 +119,8 @@ def parse_sheet_data(values, hostname, check_type):
         # Apply filters (case-insensitive comparison)
         if row_hostname.strip().lower() != hostname.lower():
             continue
-        if row_check_type.strip().upper() != check_type.upper():
+        # Check if the requested check_type is in the row's CheckType (supports comma-separated values)
+        if check_type.upper() not in row_check_type.strip().upper():
             continue
 
         # Build output object with all columns
@@ -109,6 +129,46 @@ def parse_sheet_data(values, hostname, check_type):
             value = row[i] if i < len(row) else ''
             result[header] = value.strip()
 
+        # Validation: Check for required fields
+        check_name = result.get('CheckName', '').strip()
+        check_type_val = result.get('CheckType', '').strip()
+        check_host = result.get('CheckHost', '').strip()
+        check_port = result.get('CheckPort', '').strip() if check_port_idx is not None else None
+
+        # Skip if CheckName is empty
+        if not check_name:
+            print(f"Warning: Skipping row {row_num}: CheckName is empty", file=sys.stderr)
+            continue
+
+        # Skip if CheckType is empty
+        if not check_type_val:
+            print(f"Warning: Skipping row {row_num}: CheckType is empty", file=sys.stderr)
+            continue
+
+        # Skip if CheckHost is empty
+        if not check_host:
+            print(f"Warning: Skipping row {row_num}: CheckHost is empty", file=sys.stderr)
+            continue
+
+        # Skip if CheckPort is empty when CheckType contains TCP
+        if 'TCP' in check_type_val.upper():
+            if check_port_idx is None:
+                print(f"Warning: Skipping row {row_num}: CheckPort column not found but required for TCP checks", file=sys.stderr)
+                continue
+            if not check_port:
+                print(f"Warning: Skipping row {row_num}: CheckPort is empty for TCP check", file=sys.stderr)
+                continue
+
+        # Duplicate detection: Check if this combination already exists
+        check_key = (row_hostname.strip().lower(), check_name.lower(), check_type.upper())
+        if check_key in seen_checks:
+            print(f"Warning: Skipping row {row_num}: Duplicate check (Hostname={row_hostname.strip()}, CheckName={check_name}, CheckType={check_type.upper()})", file=sys.stderr)
+            continue
+
+        # Mark this combination as seen
+        seen_checks.add(check_key)
+
+        # Add to results
         results.append(result)
 
     return results
