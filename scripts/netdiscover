@@ -159,8 +159,18 @@ def parse_config(config_path='/conf/config.xml', mode='interfaces'):
     if mode == 'interfaces':
         # Output only if_* fields for all enabled interfaces
         for iface_tag, iface_info in interfaces.items():
+            if_name = iface_info.get('if_name', '')
+
+            # Skip WireGuard group interface
+            if if_name == 'wireguard':
+                continue
+
+            # Skip loopback interface
+            if if_name == 'lo0':
+                continue
+
             output = {
-                'if_name': iface_info.get('if_name', ''),
+                'if_name': if_name,
                 'if_descr': iface_info.get('if_descr', ''),
                 'if_addr': iface_info.get('if_addr', '')
             }
