@@ -1,3 +1,165 @@
-#!/bin/sh
-SOURCE_IP=$1
-/usr/local/bin/speedtest-cli --secure --timeout 30 --json --source ${SOURCE_IP}
+#!/usr/local/bin/python3
+"""
+wanspeed - Run speedtest and send results to Zabbix via zabbix_sender
+
+Usage:
+  wanspeed <source_ip>
+
+Returns immediately with timestamp, then runs speedtest in background
+and sends results back to Zabbix using zabbix_sender.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime
+
+
+def parse_zabbix_config(config_path='/usr/local/etc/zabbix_agentd.conf'):
+    """Parse Zabbix agent configuration file."""
+    config = {}
+
+    try:
+        # Use sudo to read the config file
+        result = subprocess.run(
+            ['/usr/local/bin/sudo', 'cat', config_path],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if result.returncode != 0:
+            print(f"Error reading Zabbix config: {result.stderr}", file=sys.stderr)
+            sys.exit(1)
+
+        for line in result.stdout.split('\n'):
+            line = line.strip()
+            # Skip comments and empty lines
+            if not line or line.startswith('#'):
+                continue
+
+            # Parse key=value pairs
+            if '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+
+                if key in ['ServerActive', 'Hostname', 'TLSPSKFile', 'TLSPSKIdentity']:
+                    config[key] = value
+    except Exception as e:
+        print(f"Error reading Zabbix config: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate required fields
+    required = ['ServerActive', 'Hostname', 'TLSPSKFile', 'TLSPSKIdentity']
+    missing = [f for f in required if f not in config]
+    if missing:
+        print(f"Error: Missing required config fields: {', '.join(missing)}", file=sys.stderr)
+        sys.exit(1)
+
+    # Parse ServerActive (format: server:port)
+    if ':' in config['ServerActive']:
+        server, port = config['ServerActive'].rsplit(':', 1)
+        config['Server'] = server
+        config['Port'] = port
+    else:
+        config['Server'] = config['ServerActive']
+        config['Port'] = '10051'  # Default Zabbix port
+
+    return config
+
+
+def run_speedtest_background(source_ip, zabbix_config):
+    """Fork process to run speedtest and send results to Zabbix."""
+    pid = os.fork()
+
+    if pid > 0:
+        # Parent process - return immediately
+        return
+
+    # Child process - run speedtest and send results
+    try:
+        # Run speedtest-cli
+        result = subprocess.run(
+            ['/usr/local/bin/speedtest-cli', '--secure', '--timeout', '30',
+             '--json', '--source', source_ip],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+
+        if result.returncode != 0:
+            sys.exit(1)
+
+        # Parse JSON output
+        data = json.loads(result.stdout)
+        download = data.get('download', 0)  # bits/s
+        upload = data.get('upload', 0)      # bits/s
+
+        # Send download result
+        send_to_zabbix(
+            zabbix_config,
+            f'pki.tools.wanspeed.download["{source_ip}"]',
+            download
+        )
+
+        # Send upload result
+        send_to_zabbix(
+            zabbix_config,
+            f'pki.tools.wanspeed.upload["{source_ip}"]',
+            upload
+        )
+
+    except Exception:
+        pass  # Silently fail in background process
+    finally:
+        sys.exit(0)
+
+
+def send_to_zabbix(config, key, value):
+    """Send value to Zabbix using zabbix_sender."""
+    try:
+        # Use sudo to run zabbix_sender (needs to read PSK file)
+        subprocess.run(
+            [
+                '/usr/local/bin/sudo',
+                '/usr/local/bin/zabbix_sender',
+                '-z', config['Server'],
+                '-p', config['Port'],
+                '-s', config['Hostname'],
+                '-k', key,
+                '-o', str(value),
+                '--tls-connect', 'psk',
+                '--tls-psk-identity', config['TLSPSKIdentity'],
+                '--tls-psk-file', config['TLSPSKFile']
+            ],
+            capture_output=True,
+            timeout=10
+        )
+    except Exception:
+        pass  # Silently fail
+
+
+def main():
+    """Main entry point."""
+    if len(sys.argv) < 2:
+        print("Usage: wanspeed <source_ip>", file=sys.stderr)
+        sys.exit(1)
+
+    source_ip = sys.argv[1]
+
+    # Parse Zabbix configuration
+    zabbix_config = parse_zabbix_config()
+
+    # Fork background process
+    run_speedtest_background(source_ip, zabbix_config)
+
+    # Return timestamp immediately
+    timestamp = datetime.now().isoformat()
+    print(timestamp)
+
+
+if __name__ == '__main__':
+    main()
