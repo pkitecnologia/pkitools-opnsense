@@ -17,9 +17,22 @@ import sys
 from datetime import datetime
 
 
-def parse_zabbix_config(config_path='/usr/local/etc/zabbix_agentd.conf'):
+def log_message(log_file, message):
+    """Write log message to file with timestamp."""
+    try:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open(log_file, 'a') as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass  # Silently fail if logging fails
+
+
+def parse_zabbix_config(config_path='/usr/local/etc/zabbix_agentd.conf', log_file=None):
     """Parse Zabbix agent configuration file."""
     config = {}
+
+    if log_file:
+        log_message(log_file, f"Reading Zabbix config from: {config_path}")
 
     try:
         # Use sudo to read the config file
@@ -31,6 +44,8 @@ def parse_zabbix_config(config_path='/usr/local/etc/zabbix_agentd.conf'):
         )
 
         if result.returncode != 0:
+            if log_file:
+                log_message(log_file, f"Failed to read config: returncode={result.returncode}, stderr={result.stderr}")
             print(f"Error reading Zabbix config: {result.stderr}", file=sys.stderr)
             sys.exit(1)
 
@@ -48,7 +63,13 @@ def parse_zabbix_config(config_path='/usr/local/etc/zabbix_agentd.conf'):
 
                 if key in ['ServerActive', 'Hostname', 'TLSPSKFile', 'TLSPSKIdentity']:
                     config[key] = value
+
+        if log_file:
+            log_message(log_file, f"Config parsed successfully: {list(config.keys())}")
+
     except Exception as e:
+        if log_file:
+            log_message(log_file, f"Exception reading config: {e}")
         print(f"Error reading Zabbix config: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -56,6 +77,8 @@ def parse_zabbix_config(config_path='/usr/local/etc/zabbix_agentd.conf'):
     required = ['ServerActive', 'Hostname', 'TLSPSKFile', 'TLSPSKIdentity']
     missing = [f for f in required if f not in config]
     if missing:
+        if log_file:
+            log_message(log_file, f"Missing config fields: {', '.join(missing)}")
         print(f"Error: Missing required config fields: {', '.join(missing)}", file=sys.stderr)
         sys.exit(1)
 
@@ -68,20 +91,30 @@ def parse_zabbix_config(config_path='/usr/local/etc/zabbix_agentd.conf'):
         config['Server'] = config['ServerActive']
         config['Port'] = '10051'  # Default Zabbix port
 
+    if log_file:
+        log_message(log_file, f"Zabbix server: {config['Server']}:{config['Port']}, Hostname: {config['Hostname']}")
+
     return config
 
 
-def run_speedtest_background(source_ip, zabbix_config):
+def run_speedtest_background(source_ip, zabbix_config, log_file):
     """Fork process to run speedtest and send results to Zabbix."""
+    log_message(log_file, f"Forking background process for source IP: {source_ip}")
+
     pid = os.fork()
 
     if pid > 0:
         # Parent process - return immediately
+        log_message(log_file, f"Parent process continuing, child PID: {pid}")
         return
 
     # Child process - run speedtest and send results
+    log_message(log_file, "Child process started, running speedtest...")
+
     try:
         # Run speedtest-cli
+        log_message(log_file, f"Executing: /usr/local/bin/speedtest-cli --secure --timeout 30 --json --source {source_ip}")
+
         result = subprocess.run(
             ['/usr/local/bin/speedtest-cli', '--secure', '--timeout', '30',
              '--json', '--source', source_ip],
@@ -90,56 +123,94 @@ def run_speedtest_background(source_ip, zabbix_config):
             timeout=60
         )
 
+        log_message(log_file, f"Speedtest completed with returncode: {result.returncode}")
+
         if result.returncode != 0:
+            log_message(log_file, f"Speedtest failed - stdout: {result.stdout[:200]}")
+            log_message(log_file, f"Speedtest failed - stderr: {result.stderr[:200]}")
             sys.exit(1)
 
         # Parse JSON output
+        log_message(log_file, f"Parsing JSON output (length: {len(result.stdout)} bytes)")
         data = json.loads(result.stdout)
         download = data.get('download', 0)  # bits/s
         upload = data.get('upload', 0)      # bits/s
 
+        log_message(log_file, f"Speedtest results - Download: {download} bits/s, Upload: {upload} bits/s")
+
         # Send download result
+        log_message(log_file, f"Sending download result to Zabbix...")
         send_to_zabbix(
             zabbix_config,
             f'pki.tools.wanspeed.download["{source_ip}"]',
-            download
+            download,
+            log_file
         )
 
         # Send upload result
+        log_message(log_file, f"Sending upload result to Zabbix...")
         send_to_zabbix(
             zabbix_config,
             f'pki.tools.wanspeed.upload["{source_ip}"]',
-            upload
+            upload,
+            log_file
         )
 
-    except Exception:
-        pass  # Silently fail in background process
+        log_message(log_file, "Background process completed successfully")
+
+    except json.JSONDecodeError as e:
+        log_message(log_file, f"JSON parsing error: {e}")
+        log_message(log_file, f"Output was: {result.stdout[:500]}")
+    except subprocess.TimeoutExpired:
+        log_message(log_file, "Speedtest timed out after 60 seconds")
+    except Exception as e:
+        log_message(log_file, f"Unexpected exception in background process: {type(e).__name__}: {e}")
     finally:
+        log_message(log_file, "Child process exiting")
         sys.exit(0)
 
 
-def send_to_zabbix(config, key, value):
+def send_to_zabbix(config, key, value, log_file):
     """Send value to Zabbix using zabbix_sender."""
     try:
         # Use sudo to run zabbix_sender (needs to read PSK file)
-        subprocess.run(
-            [
-                '/usr/local/bin/sudo',
-                '/usr/local/bin/zabbix_sender',
-                '-z', config['Server'],
-                '-p', config['Port'],
-                '-s', config['Hostname'],
-                '-k', key,
-                '-o', str(value),
-                '--tls-connect', 'psk',
-                '--tls-psk-identity', config['TLSPSKIdentity'],
-                '--tls-psk-file', config['TLSPSKFile']
-            ],
+        cmd = [
+            '/usr/local/bin/sudo',
+            '/usr/local/bin/zabbix_sender',
+            '-z', config['Server'],
+            '-p', config['Port'],
+            '-s', config['Hostname'],
+            '-k', key,
+            '-o', str(value),
+            '--tls-connect', 'psk',
+            '--tls-psk-identity', config['TLSPSKIdentity'],
+            '--tls-psk-file', config['TLSPSKFile']
+        ]
+
+        log_message(log_file, f"Executing zabbix_sender: {' '.join(cmd[:8])}... (credentials hidden)")
+
+        result = subprocess.run(
+            cmd,
             capture_output=True,
+            text=True,
             timeout=10
         )
-    except Exception:
-        pass  # Silently fail
+
+        log_message(log_file, f"zabbix_sender returncode: {result.returncode}")
+        if result.stdout:
+            log_message(log_file, f"zabbix_sender stdout: {result.stdout.strip()}")
+        if result.stderr:
+            log_message(log_file, f"zabbix_sender stderr: {result.stderr.strip()}")
+
+        if result.returncode == 0:
+            log_message(log_file, f"Successfully sent {key} = {value} to Zabbix")
+        else:
+            log_message(log_file, f"Failed to send {key} to Zabbix (returncode: {result.returncode})")
+
+    except subprocess.TimeoutExpired:
+        log_message(log_file, f"zabbix_sender timed out for key: {key}")
+    except Exception as e:
+        log_message(log_file, f"Exception in send_to_zabbix: {type(e).__name__}: {e}")
 
 
 def main():
@@ -150,14 +221,21 @@ def main():
 
     source_ip = sys.argv[1]
 
+    # Create log file path based on source IP
+    log_file = f"/tmp/wanspeed-{source_ip}.log"
+
+    log_message(log_file, "=" * 80)
+    log_message(log_file, f"Script started with source IP: {source_ip}")
+
     # Parse Zabbix configuration
-    zabbix_config = parse_zabbix_config()
+    zabbix_config = parse_zabbix_config(log_file=log_file)
 
     # Fork background process
-    run_speedtest_background(source_ip, zabbix_config)
+    run_speedtest_background(source_ip, zabbix_config, log_file)
 
     # Return timestamp immediately
     timestamp = datetime.now().isoformat()
+    log_message(log_file, f"Returning timestamp to caller: {timestamp}")
     print(timestamp)
 
 
