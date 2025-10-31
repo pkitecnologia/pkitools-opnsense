@@ -109,7 +109,31 @@ def run_speedtest_background(source_ip, zabbix_config, log_file):
         return
 
     # Child process - run speedtest and send results
-    log_message(log_file, "Child process started, running speedtest...")
+    log_message(log_file, "Child process started, daemonizing...")
+
+    # Daemonize: detach from parent's file descriptors and session
+    try:
+        # Create new session and become session leader
+        os.setsid()
+        log_message(log_file, "Created new session (setsid)")
+
+        # Close inherited file descriptors
+        sys.stdin.close()
+        sys.stdout.close()
+        sys.stderr.close()
+
+        # Redirect stdin, stdout, stderr to /dev/null
+        devnull = os.open('/dev/null', os.O_RDWR)
+        os.dup2(devnull, 0)  # stdin
+        os.dup2(devnull, 1)  # stdout
+        os.dup2(devnull, 2)  # stderr
+        if devnull > 2:
+            os.close(devnull)
+
+        log_message(log_file, "File descriptors closed and redirected to /dev/null")
+    except Exception as e:
+        log_message(log_file, f"Failed to daemonize: {e}")
+        sys.exit(1)
 
     try:
         # Run speedtest-cli
