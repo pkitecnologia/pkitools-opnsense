@@ -120,7 +120,7 @@ def run_speedtest_background(source_ip, zabbix_config, log_file):
              '--json', '--source', source_ip],
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=120
         )
 
         log_message(log_file, f"Speedtest completed with returncode: {result.returncode}")
@@ -162,7 +162,7 @@ def run_speedtest_background(source_ip, zabbix_config, log_file):
         log_message(log_file, f"JSON parsing error: {e}")
         log_message(log_file, f"Output was: {result.stdout[:500]}")
     except subprocess.TimeoutExpired:
-        log_message(log_file, "Speedtest timed out after 60 seconds")
+        log_message(log_file, "Speedtest timed out after 120 seconds")
     except Exception as e:
         log_message(log_file, f"Unexpected exception in background process: {type(e).__name__}: {e}")
     finally:
