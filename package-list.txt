@@ -1,3 +1,2 @@
 jq
-py311-lxml
-py311-speedtest-cli
+py313-speedtest-cli
